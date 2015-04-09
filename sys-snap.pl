@@ -21,14 +21,15 @@ use strict;
 my $usage = <<"ENDTXT";
 USAGE: ./sys-snap.pl [options]
 	--start : Creates, disowns, and drops 'sys-snap.pl --start' process into the background
-	--print <start-time end-time>: Where time HH:MM, prints basic usage by default
-	--v | v : verbose output from --print 
-	--check : Checks if sys-snap is running
 	--stop : stops sys-snap after confirming PID info
-	--loadavg <start-time end-time>: Where time HH:MM, prints load average for time period - default 10 min interval
-	--max-lines : max number of processes printed per mem/cpu section
+	--check : Checks if sys-snap is running
+	--print <start-time end-time>: Where time HH:MM, prints basic usage by default
+	--v | v : verbose output from --print
+	--max-lines : max number of processes printed per mem/cpu section, default is 20
+	--ll : line length, default is 145
 	--no-cpu | --nc : skips CPU output
 	--no-mem | --nm : skips memory output
+	--loadavg <start-time end-time>: Where time HH:MM, prints load average for time period - default 10 min interval
 ENDTXT
 
 foreach (@ARGV) {
@@ -199,9 +200,11 @@ sub snap_print_range {
 my $time1;
 my $time2;
 my $detail_level="b";
-my $max_lines=75;
+my $max_lines=20;
 my $print_cpu = "1";
 my $print_memory = "1";
+# old school 80 is standard, but 145 works well with 1366 width monitor
+my $line_length = "151";
 
 for my $i (0 .. @ARGV-1) {
 
@@ -210,11 +213,17 @@ for my $i (0 .. @ARGV-1) {
 
 	if ($ARGV[$i] eq "v" || $ARGV[$i] eq "--v") { $detail_level = "v"; }
 	if($ARGV[$i] =~ /^--max-lines=(\d+)$/) { $max_lines = $1; }
-	elsif($ARGV[$i] =~ /^--max-lines$/) { if ($ARGV[$i+1] =~ /^(\d+)$/) { $max_lines = $1;} }
+	elsif($ARGV[$i] =~ /^--max-lines$/) { if ($ARGV[$i+1] =~ /^(\d+)$/) { $max_lines = $1; } }
 
 	if($ARGV[$i] =~ /^--no-cpu$/ || $ARGV[$i] =~ /^--nc$/) { $print_cpu=0 };
 	if($ARGV[$i] =~ /^--no-mem$/ || $ARGV[$i] =~ /^--nm$/) { $print_memory=0 };
+	if($ARGV[$i] =~ /^--ll=(\d+)$/) { $line_length = $1 }
+	elsif($ARGV[$i] =~ /^--ll$/) { if ($ARGV[$i+1] =~ /^(\d+)$/) { $line_length=$1; } }
 }
+
+# the default formatting where the process ID is added needs 16 lines
+# subtracting 16 here will make the specified width more "true"
+$line_length = $line_length - 16;
 
 if (!defined $time1 || !defined $time2) { print "Need 2 parameters, \"./snap-print start-time end-time\"\n"; exit;}
 
@@ -275,7 +284,7 @@ foreach my $user ( sort { $basic_usage{$b}->{$sort_param} <=> $basic_usage{$a}->
 		printf "\n\tcpu-score: %-10.2f\n", $basic_usage{$user}{'cpu'};
 		for (@sorted_cpu) {
 			printf "\t\tC: %4.2f proc: ", $users_wcpu_process{$user}{$_};
-			print "$_\n";
+			print substr($_, 0, $line_length) . "\n";
 			if ($num_lines >= $max_lines-1) { last; }
 			else { $num_lines += 1; }
 		}
@@ -290,7 +299,7 @@ foreach my $user ( sort { $basic_usage{$b}->{$sort_param} <=> $basic_usage{$a}->
 		printf "\n\tmemory-score: %-11.2f\n", $basic_usage{$user}{'memory'};
 		for (@sorted_mem) {
 			printf "\t\tM: %4.2f proc: ", $users_wmemory_process{$user}{$_};
-			print "$_\n";
+			print substr($_, 0, $line_length) . "\n";
 			if ($num_lines >= $max_lines-1) { last; }
 			else { $num_lines += 1; }
 		}
