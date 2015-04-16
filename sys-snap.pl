@@ -256,7 +256,7 @@ my %users_wcpu_process;
 my %users_wmemory_process;
 
 # instead of having an extended subrutine, just going to fall into the rest of the file
-if ( !(defined $detail_level) || $detail_level eq 'b') { &run_basic(\%basic_usage); exit}
+if ( !(defined $detail_level) || $detail_level eq 'b') { &run_basic(\%basic_usage, $print_cpu, $print_memory); exit}
 
 # adding up memory and CPU usage per user's process
 foreach my $user (sort keys %process_list_data) {
@@ -310,19 +310,29 @@ foreach my $user ( sort { $basic_usage{$b}->{$sort_param} <=> $basic_usage{$a}->
 
 exit;
 
+# since mem and cpu info gets printed to the same line, we already have the data at this point,
+# and even sorting a large number of users by usage is relativly inexpensive, just going to mute unwanted output
 sub run_basic {
 	my $tmp = shift;
+	my $print_cpu = shift;
+	my $print_memory = shift;
 	my %basic_usage;
 	%basic_usage = %$tmp;
 
+	my $sortby = 'cpu';
+	if ($print_cpu != 1) { $sortby = 'memory'; }
 	foreach my $key (
-			sort { $basic_usage{$b}->{cpu} <=> $basic_usage{$a}->{cpu} }
+			sort { $basic_usage{$b}->{$sortby} <=> $basic_usage{$a}->{$sortby} }
 			keys %basic_usage
 			)
 	{
 		my $value = $basic_usage{$key};
-		printf( "user: %-15s\n\tcpu-score: %-12.2f \n\tmemory-score: %-12.2f\n\n", $key, $value->{cpu}, $value->{memory} );
+#printf( "user: %-15s\n\tcpu-score: %-12.2f \n\tmemory-score: %-12.2f\n\n", $key, $value->{cpu}, $value->{memory} );
+		printf( "user: %-15s\n", $key);
+		printf("\tcpu-score: %-12.2f\n", $value->{cpu}) if $print_cpu;
+		printf("\tmemory-score: %-12.2f\n", $value->{memory}) if $print_memory;
 	}
+	print "\n";
 
 	exit;
 }
