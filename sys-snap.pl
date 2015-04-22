@@ -33,6 +33,7 @@ USAGE: ./sys-snap.pl [options]
 ENDTXT
 
 foreach (@ARGV) {
+
 	if ($_ eq "--start") { run_install(); exit;}
 	elsif ($_ eq "--stop") { stop_syssnap(); exit;}
 	elsif ($_ eq "--check") { check_status(); exit;}
@@ -46,17 +47,25 @@ sub loadavg {
 	my $time1;
 	my $time2;
 	my $interval = 10;
-
+	my $root_dir = "/root";
+	my $snapshot_dir = "/system-snapshot";
+	my $custom_dir = "";
 	for my $i (0 .. @ARGV-1) {
 		if($ARGV[$i] =~ /^\d+:\d+$/ && !defined $time1 && !defined $time2) { $time1 = $ARGV[$i]; }
 		elsif($ARGV[$i] =~ /^\d+:\d+$/ && defined $time1 && !defined $time2) { $time2 = $ARGV[$i]; }
 		if($ARGV[$i] =~ /--i=(\d+)/) { $interval = $1; }
 		elsif ($ARGV[$i] =~ /^--i$/ && $ARGV[$i+1] =~ /^\d+$/) { $interval = $ARGV[$i+1]; }
+
+	        if($ARGV[$i] =~ /^--dir=([A-Za-z0-9\.\/-]+)$/) { $custom_dir = $1 }
+	        elsif($ARGV[$i] =~ /^--dir$/) { if ($ARGV[$i+1] =~ /^([A-Za-z0-9\.\/-]+)$/) { $custom_dir = $1; } }
+	}
+
+	if($custom_dir ne "") {
+		$root_dir = "";
+		$snapshot_dir = $custom_dir;
 	}
 
 	if($interval > 60 || $interval < 0) { $interval = 10; }
-	my $root_dir = "/root";
-	my $snapshot_dir = "/system-snapshot";
 	my ($time1_hour, $time1_minute, $time2_hour, $time2_minute) = &parse_check_time($time1, $time2);
 
 	my @snap_log_files = &get_range($root_dir, $snapshot_dir, $time1_hour, $time1_minute, $time2_hour, $time2_minute);
@@ -205,6 +214,9 @@ my $print_cpu = "1";
 my $print_memory = "1";
 # old school 80 is standard, but 145 works well with 1366 width monitor
 my $line_length = "151";
+my $root_dir = '/root';
+my $snapshot_dir = '/system-snapshot';
+my $custom_dir = "";
 
 for my $i (0 .. @ARGV-1) {
 
@@ -219,6 +231,14 @@ for my $i (0 .. @ARGV-1) {
 	if($ARGV[$i] =~ /^--no-mem$/ || $ARGV[$i] =~ /^--nm$/) { $print_memory=0 };
 	if($ARGV[$i] =~ /^--ll=(\d+)$/) { $line_length = $1 }
 	elsif($ARGV[$i] =~ /^--ll$/) { if ($ARGV[$i+1] =~ /^(\d+)$/) { $line_length=$1; } }
+
+	if($ARGV[$i] =~ /^--dir=([A-Za-z0-9\.\/-]+)$/) { $custom_dir = $1 }
+	elsif($ARGV[$i] =~ /^--dir$/) { if ($ARGV[$i+1] =~ /^([A-Za-z0-9\.\/-]+)$/) { $custom_dir = $1; } }
+}
+
+if($custom_dir ne "") {
+	$root_dir = "";
+	$snapshot_dir = $custom_dir;
 }
 
 # the default formatting where the process ID is added needs 16 lines
@@ -230,13 +250,10 @@ if (!defined $time1 || !defined $time2) { print "Need 2 parameters, \"./snap-pri
 use Time::Piece;
 use Time::Seconds;
 
-my $root_dir = '/root';
-my $snapshot_dir = '/system-snapshot';
-
 # not using this yet, but if we parse a range of data that crosses this file the resulting data is noncontigous
 # and might be misleading. printing a warning might be apropriate in this scenario or having some other flag
 # to indicate this has happened
-my $newest_file = qx(ls -la ${root_dir}/system-snapshot/current);
+#my $newest_file = qx(ls -la ${root_dir}/system-snapshot/current);
 
 my ($time1_hour, $time1_minute, $time2_hour, $time2_minute) = &parse_check_time($time1, $time2);
 
