@@ -30,6 +30,7 @@ USAGE: ./sys-snap.pl [options]
 	--no-cpu | --nc : skips CPU output
 	--no-mem | --nm : skips memory output
 	--loadavg <start-time end-time>: Where time HH:MM, prints load average for time period - default 10 min interval
+	--dir : specifies a different sys-snap folder for --print and --loadavg
 ENDTXT
 
 foreach (@ARGV) {
