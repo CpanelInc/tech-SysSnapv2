@@ -19,7 +19,6 @@ use warnings;
 use strict;
 use Getopt::Long;
 
-my @time;
 my %opt = (
     'start'         => 0,
     'stop'          => 0,
@@ -90,7 +89,6 @@ elsif(@ARGV > 3) {
 elsif (@ARGV == 2){
     $opt{'time1'} = $ARGV[0];
     $opt{'time2'} = $ARGV[1];
-    #@time = ($ARGV[0], $ARGV[1]);
 }
 
 if ($opt{'loadavg'}) {
@@ -164,6 +162,7 @@ sub loadavg {
             print "$hour:$min\t$avg1min\t\t$avg5min\t\t$avg15min\n";
         }
     }
+    return;
 }
 
 sub stop_syssnap {
@@ -171,7 +170,7 @@ sub stop_syssnap {
     # prevent check_status from printing to terminal
     {
         local *STDOUT;
-        open (STDOUT, '>', '/dev/null');
+        open (STDOUT, '>', '/dev/null') or die "Can't access /dev/null";
         $pid = &check_status();
     }
     if ($pid =~ /[\d+]/) {
@@ -202,6 +201,7 @@ sub stop_syssnap {
     else {
         print "Sys-snap is not currently running\n";
     }
+    return;
 }
 
 # needs to be cleaned up
@@ -303,7 +303,19 @@ sub snap_print_range {
 
     if (!defined $time1 || !defined $time2) { print "Need 2 parameters, \"./snap-print start-time end-time\"\n"; exit;}
 
-    use Time::Piece;
+    module_sanity_check();
+    eval("use Time::Piece;");
+    if ($@) {
+        print "***\nCould not install Time::Piece - try manually installing.\n***\n";
+        exit;
+    }
+    else {
+        print "\n" . "=" x 50 . "\n";
+        print "Successuflly installed Time::Piece - Continuing";
+        print "\n" . "=" x 50 . "\n";
+    }
+
+    #use Time::Piece;
     use Time::Seconds;
 
     # not using this yet, but if we parse a range of data that crosses this file the resulting data is noncontigous
@@ -655,4 +667,22 @@ sub run_install {
 
         sleep($sleep_time);
     }
+}
+
+sub module_sanity_check {
+    eval("use Time::Piece;");
+    if ($@) {
+        print "WARNING: Perl Module Time::Piece.pm not installed!\n";
+        print "Would you like sys-snap to attempt to install this moduel(y/n):";
+
+        my $choice = <STDIN>;
+        if ($choice =~ /yes|y/i) {
+            print "Installing now - Please stand by.\n";
+            system("cpan -i Time::Piece");
+        }
+        else {
+            exit;
+        }
+    }
+    return;
 }
