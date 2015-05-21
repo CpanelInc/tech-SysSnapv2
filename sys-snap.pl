@@ -309,13 +309,7 @@ sub snap_print_range {
         print "***\nCould not install Time::Piece - try manually installing.\n***\n";
         exit;
     }
-    else {
-        print "\n" . "=" x 50 . "\n";
-        print "Successuflly installed Time::Piece - Continuing";
-        print "\n" . "=" x 50 . "\n";
-    }
 
-    #use Time::Piece;
     use Time::Seconds;
 
     # not using this yet, but if we parse a range of data that crosses this file the resulting data is noncontigous
