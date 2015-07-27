@@ -128,6 +128,7 @@ ENDTXT
 }
 
 sub loadavg {
+    eval("use Time::Piece;");
     my %opt = %{shift @_};
     my $time1 = $opt{'time1'};
     my $time2 = $opt{'time2'};
