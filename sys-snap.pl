@@ -26,6 +26,7 @@ my %opt = (
     'print'         => 0,
     'loadavg'       => 0,
     'help'          => 0,
+    'network'       => 0,
     'print_cpu'     => 1,
     'print_memory'  => 1,
     'interval'      => 10,
@@ -39,6 +40,7 @@ my %opt = (
 GetOptions( \%opt,
     'help|h+',
     'print',
+    'network',
     'start',
     'stop',
     'check|c',
@@ -101,9 +103,85 @@ if ($opt{'print'}) {
     exit;
 }
 
+if($opt{'network'}) {
+    snap_network(\%opt);
+    exit;
+}
+
 # I don't think the logic flow should ever hit this, but just in case
 usage();
 exit;
+
+sub snap_network {
+    my %opt = %{shift @_};
+    my $time1 = $opt{'time1'};
+    my $time2 = $opt{'time2'};
+    my $snapshot_dir = $opt{'dir'};
+    my $detail_level= $opt{'verbose'};
+    my $max_lines= $opt{'max-lines'};
+    my $print_cpu = $opt{'print_cpu'};
+    my $print_memory = $opt{'print_memory'};
+    # old school 80 is standard, but 145 works well with 1366 width monitor
+    my $line_length = $opt{'line_length'};
+
+    #root_dir is legacy param, will remove later
+    my $root_dir = "";
+
+    # the default formatting where the process ID is added needs 16 lines
+    # subtracting 16 here will make the specified width more "true"
+    $line_length = $line_length - 16;
+
+    module_sanity_check();
+    eval("use Time::Piece;");
+    if ($@) {
+        print "***\nCould not install Time::Piece - try manually installing.\n***\n";
+        exit;
+    }
+
+    my ($time1_hour, $time1_minute, $time2_hour, $time2_minute) = &parse_check_time($time1, $time2);
+    my @snap_log_files = &get_range($root_dir, $snapshot_dir, $time1_hour, $time1_minute, $time2_hour, $time2_minute);
+
+    my %ip_connections;
+    my (%localip, %foreignip);
+    #print "Time\t1min-avg\t5min-avg\t15min-avg\n";
+    foreach my $file_name (@snap_log_files) {
+
+        open (my $FILE, "<", $file_name) or next; #die "Couldn't open file: $!";
+        my $string = join("", <$FILE>);
+        close ($FILE);
+
+        my @lines;
+        # reading line by line to split the sections might be faster
+        my $matchme = "^Active Internet connections [^\n]+\n";
+        #my $matchme = "^Process List:\n\nUSER[^\n]+COMMAND\n";
+        if($string =~ /$matchme(.*)\nActive UNIX domain sockets \(servers and established\)/sm){
+            my $baseString=$1;
+            @lines = split(/\n/, $baseString);
+        }
+
+        # could add ports in the future and connection state
+        foreach my $line (@lines) {
+            if ($line =~ /[a-z]{3}\s+\d+\s+\d+\s+(\d+\.\d+\.\d+\.\d+):\d+\s+(\d+\.\d+\.\d+\.\d+):[^\*]/) {
+                if ($ip_connections{$1}{$2}){
+                    $ip_connections{$1}{$2} += 1;
+                }
+                else {
+                    $ip_connections{$1}{$2} = 1;
+                }
+            }
+        }
+    }
+
+    foreach my $localip (keys %ip_connections){
+        my @sorted_ip = sort { $ip_connections{$localip}{$b} <=>
+            $ip_connections{$localip}{$a} } keys %{$ip_connections{$localip}};
+        print "$localip: \n";
+        for (@sorted_ip) {
+            printf "\t%-15s %-8d\n", $_, $ip_connections{$localip}{$_};
+        }
+        print "\n";
+    }
+}
 
 sub usage {
     my $text = <<"ENDTXT";
@@ -112,7 +190,8 @@ USAGE:
     --start : Creates, disowns, and drops 'sys-snap.pl --start' process into the background
     --stop : stops sys-snap after confirming PID info
     --check : Checks if sys-snap is running
-    --print <start-time end-time>: Where time HH:MM, prints basic usage by default
+    --print <start-time end-time> : Where time HH:MM, prints basic usage by default
+    --network <start-time end-time> : Prints IP connections durring time range
     --v | v : verbose output from --print
     --max-lines : max number of processes printed per mem/cpu section, default is 20
     --ll : line length, default is 145
@@ -374,7 +453,6 @@ sub snap_print_range {
 
             my @sorted_mem = sort { $users_wmemory_process{$user}{$b} <=>
                 $users_wmemory_process{$user}{$a} } keys %{$users_wmemory_process{$user}};
-
             printf "\n\tmemory-score: %-11.2f\n", $basic_usage{$user}{'memory'};
             for (@sorted_mem) {
                 printf "\t\tM: %4.2f proc: ", $users_wmemory_process{$user}{$_};
