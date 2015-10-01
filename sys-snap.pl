@@ -27,6 +27,7 @@ my %opt = (
     'loadavg'       => 0,
     'help'          => 0,
     'network'       => 0,
+    'io'            => 0,
     'print_cpu'     => 1,
     'print_memory'  => 1,
     'interval'      => 10,
@@ -45,6 +46,7 @@ GetOptions( \%opt,
     'stop',
     'check|c',
     'loadavg',
+    'io',
     'cpu!'              => \$opt{'print_cpu'},
     'mem!'              => \$opt{'print_memory'},
     'interval|i=i'      => \$opt{'interval'},
@@ -95,6 +97,11 @@ elsif (@ARGV == 2){
 
 if ($opt{'loadavg'}) {
     loadavg(\%opt);
+    exit;
+}
+
+if ($opt{'io'}) {
+    snap_io(\%opt);
     exit;
 }
 
@@ -160,8 +167,9 @@ sub snap_network {
         }
 
         # could add ports in the future and connection state
+        # should skip listen and time_wait entries
         foreach my $line (@lines) {
-            if ($line =~ /[a-z]{3}\s+\d+\s+\d+\s+(\d+\.\d+\.\d+\.\d+):\d+\s+(\d+\.\d+\.\d+\.\d+):[^\*]/) {
+            if ($line =~ /[a-z]{3}\s+\d+\s+\d+\s+(\d+\.\d+\.\d+\.\d+):\d+\s+(\d+\.\d+\.\d+\.\d+):\d+\s+(?!TIME_WAIT)/) {
                 if ($ip_connections{$1}{$2}){
                     $ip_connections{$1}{$2} += 1;
                 }
@@ -204,6 +212,52 @@ ENDTXT
 
     print $text;
     exit;
+}
+
+sub snap_io {
+    eval("use Time::Piece;");
+    my %opt = %{shift @_};
+    my $time1 = $opt{'time1'};
+    my $time2 = $opt{'time2'};
+    my $interval = $opt{'interval'};
+    my $snapshot_dir = $opt{'dir'};
+
+    #root_dir is legacy param, will remove later
+    my $root_dir = "";
+
+    if($interval > 60 || $interval < 0) {
+        $interval = 10;
+    }
+
+    my ($time1_hour, $time1_minute, $time2_hour, $time2_minute) = &parse_check_time($time1, $time2);
+    my @snap_log_files = &get_range($root_dir, $snapshot_dir, $time1_hour, $time1_minute, $time2_hour, $time2_minute);
+
+    print "avg-cpu:\t%user\t%nice\t%system\t%iowait\t%steal\t%idle\n";
+    foreach my $file_name (@snap_log_files) {
+        # load information is currently printed to the first line
+        # only need to read first line
+        open (my $FILE, "<", $file_name) or next; #die "Couldn't open file: $!";
+        #my $string = <$FILE>;
+        my $string = join("", <$FILE>);
+        my ($min) = $string =~ m{^\d+\s+\d+\s+(\d+)\s+Load Average:}g;
+        #print "$min\n";
+        close ($FILE);
+
+        my @lines;
+        if($string =~ /^IO wait:\n(.*)\nMYSQL Processes:$/sm){
+            my $baseString=$1;
+            @lines = split(/\n/, $baseString);
+        }
+
+        foreach my $line (@lines) {
+            my ($io_user, $nice, $io_system, $io_wait, $steal, $idle);
+            ($io_user, $nice, $io_system, $io_wait, $steal, $idle) = $line =~ m{^\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)};
+            if(defined $io_user && ($min % $interval == 0)){
+                print "\t\t$io_user\t$nice\t$io_system\t$io_wait\t$steal\t$idle\n";
+            }
+        }
+    }
+    return;
 }
 
 sub loadavg {
@@ -453,6 +507,7 @@ sub snap_print_range {
 
             my @sorted_mem = sort { $users_wmemory_process{$user}{$b} <=>
                 $users_wmemory_process{$user}{$a} } keys %{$users_wmemory_process{$user}};
+
             printf "\n\tmemory-score: %-11.2f\n", $basic_usage{$user}{'memory'};
             for (@sorted_mem) {
                 printf "\t\tM: %4.2f proc: ", $users_wmemory_process{$user}{$_};
@@ -707,6 +762,9 @@ sub run_install {
 
         print $LOG "Network Connections:\n\n";
         print $LOG qx(netstat -anp), "\n";
+
+        print $LOG "IO wait:\n\n";
+        print $LOG qx(iostat), "\n";
 
         # optional logging
         if ($mysql) {
