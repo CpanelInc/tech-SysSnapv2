@@ -758,7 +758,7 @@ sub run_install {
         print $LOG qx(vmstat 1 10), "\n";
 
         print $LOG "Process List:\n\n";
-        print $LOG qx(ps auwwxf), "\n";
+        print $LOG qx(ps awwxf -o user:20,pid,pcpu,pmem,vsz,rss,tty,stat,start,time,comm), "\n";
 
         print $LOG "Network Connections:\n\n";
         print $LOG qx(netstat -anp), "\n";
