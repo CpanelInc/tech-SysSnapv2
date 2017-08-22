@@ -14,7 +14,7 @@ Resource shortages can feel overwhelming and  impossible to track down without 
 <p>
 Sys-snap is designed to help you see what is causing the resource shortages, whether CPU or Memory related, even when no one is looking. 
 </p>
-***
+
 <p>
 This version of sys-snap is specifically designed to be used via SSH by the root user on cPanel servers, which means that this documentation and application is aimed at RedHat and CentOS systems.
 </p>
@@ -33,9 +33,9 @@ Install
 <p>
 Sys-snap’s installation is incredibly simple two step process: Download the script, and run the install.
 </p>
+
 ```
-wget -O /root/sys-snap.pl https://raw.githubusercontent.com/cPanelTechs/SysSnapv2/master/sys-snap.pl
-cd /root/ && chmod 744 sys-snap.pl && perl sys-snap.pl --start
+wget -O /root/sys-snap.pl https://raw.githubusercontent.com/cPanelTechs/SysSnapv2/master/sys-snap.pl && cd /root/ && chmod 744 sys-snap.pl && perl sys-snap.pl --start
 ```
 <p>
 Once installed, the script continues to run on the server until you stop it, or until the server reboots. After a reboot, if you want the script to resume recording data, you would need to start it again.
@@ -49,6 +49,7 @@ Starting and stopping the script
 <p>
 To start the process, run the script with the --start flag:
 </p>
+
 ```
 [~] perl /root/sys-snap.pl --start
 Sys-snap is not currently running
@@ -59,6 +60,7 @@ Starting…
 <p>
 Sys-snap will run in the background. Logs will be written to /root/sys-snapshot/ every minute. Every hour a new folder with the current hour will be created. After 24 hours the folder should look similar to this:
 </p>
+
 ```
 [~/system-snapshot] ls -lah | head
 total 104K
@@ -75,6 +77,7 @@ drwxr-xr-x   2 root root 4.0K Apr 23 14:56 14/
 <p>
 Each hour will have logs that were created for every minute of the hour:
 </p>
+
 ```
 [~/system-snapshot/0] ls -lah |head
 total 3.5M
@@ -91,8 +94,9 @@ drwxr-xr-x 26 root root 4.0K May  5 13:51 ../
 <p>
 After 24 hours the logs will start to overwrite the previous logs. Each minute will overwrite the oldest log file. The logs are based on 24 hour time. 0 is 12AM.
 </p>
-***
+
 <p>To stop the process, run the script with the --stop flag, and the script will ask you to confirm the process it is stopping:</p>
+
 ```
 [~] perl /root/sys-snap.pl --stop
 Current process: 20081 root     perl sys-snap.pl --start
@@ -112,6 +116,7 @@ If the load average of your server is larger than the number of processors, load
 <p>
 One utility that can be used in tandem with sys-snap to help you track and diagnose instability is called sar. To verify that the sysstat package is installed, use the command below. Please note: sysstat will only begin recording information after it is installed, and cannot provide insight for a server before the package was installed.
 </p>
+
 ```
 yum install -y sysstat
 ```
@@ -147,6 +152,7 @@ Using various flags you can display different information that has been recorded
 <p>
 First, go on your server to the directory where the <a href="http://sys-snap.pl">sys-snap.pl</a> script is located, which is /root by default. The --print flag attempts to programmatically calculate what it calls memory and cpu scores. It does this by adding together the %MEM and %CPU columns, respectively. While mathematically incorrect, it gives us a general overview. You will see that each set of processes is sorted by user, and you’ll see a memory- and cpu- score displayed, similar to what is displayed below:
 </p>
+
 ```
 [~] ./sys-snap.pl --print 9:00 10:00
 user: root           
@@ -175,18 +181,21 @@ memory-score: 11.70
 <p>
 The --print flag assumes you will be polling the sys-snap data for a specific time, so always pass the --print flag with a defined start and end time. For example, if we are trying to look at information between 6:30 and 7:50, as would be helpful given the output from our example above, this command would print information for the time range:
 </p>
+
 ```
 [~] /root/sys-snap.pl --print 6:30 7:50
 ```
 <p>
 When you start the script, old data is compressed into a tar file to prevent overwriting. To use sys-snap to parse old data, untar the file and pass the path using the --path flag:
 </p>
+
 ```
 [~] /root/sys-snap.pl --print 6:30 7:50 --dir=/system-snapshot.20150422
 ```
 <p>
 If we add the verbose flag to --print we can get even more detail:
 </p>
+
 ```
 [~] /root/sys-snap.pl --print 9:00 10:00 v
 < manually truncated for brevity >
@@ -202,6 +211,7 @@ M: 6.40 proc: \_ dovecot/pop3-login
 <p>
 sys-snap has a myriad of flags to make parsing through the information that is provides easier. Run the script with no flags to get the full list:
 </p>
+
 ```
 [~] ./sys-snap.pl
 USAGE: ./sys-snap.pl [options]
@@ -222,6 +232,7 @@ You can see some examples of these flags in use below in the ‘Advanced Example
 <p>
 In the example output below, the user 'eve' is showing the highest CPU usage for the interval, and you can see the command that was being run by that user:
 </p>
+
 ```
 user: dovecot         
 memory-score: 84.30    memory-score:
@@ -257,6 +268,7 @@ Advanced uses and examples
 <p>
 If you want to easily run sys-snap from any directory, add this alias to your /etc/bashrc file:
 </p>
+
 ```
 alias syssnap="/root/sys-snap.pl"
 ```
@@ -287,6 +299,7 @@ cpu-score: 0.00
 <p>
 If you want to limit the number of lines that are output per user when you are parsing through the verbose output of --print, use the --max-lines flag.
 </p>
+
 ```
 [~] ./sys-snap.pl --print 10:00 11:00 v --max-lines 5 | head 13
 user: root           
@@ -307,6 +320,7 @@ M: 15.60 proc: tailwatchd
 <u>Display load averages (helpful for servers without Sar)</u>
 </h3>
 <p>If you want to print load averages for a given time frame, you can with the --loadavg flag.</p>
+
 ```
 [~] ./sys-snap.pl --loadavg 11:00 11:30
 Time	1min-avg 5min-avg 15min-avg
@@ -318,6 +332,7 @@ Time	1min-avg 5min-avg 15min-avg
 <p>
 Add -i to change the interval between the load averages displayed
 </p>
+
 ```
 [~] ./sys-snap.pl --loadavg 11:00 11:30 --i=5
 
@@ -336,6 +351,7 @@ Time 	1min-avg 5min-avg 15min-avg
 <p>
 When you start the script you will see that it archives historical data:
 </p>
+
 ```
 [~] cd /root/ && chmod 744 sys-snap.pl && perl sys-snap.pl --start
 Sys-snap is not currently running
@@ -347,6 +363,7 @@ tar: Removing leading `/' from member names
 <p>
 If you want to access that historical data, you just need to unarchive the folder and pass the --dir flag:
 </p>
+
 ```
 [~] tar -xf system-snapshot.20150422.1341.tar.gz 
 [~] ./sys-snap.pl --print 6:30 7:50 --dir=/root/system-snapshot.20150422.1341 | head -n11
@@ -369,6 +386,7 @@ Common problems
 <p>
 You may see this error when attempting to install the script:
 </p>
+
 ```
 [~] ./sys-snap.pl --install
 
@@ -379,6 +397,7 @@ BEGIN failed--compilation aborted at ./sys-snap.pl line 126.
 <p>
 <span style="color: rgb(0,0,0);">You can correct it with this command:</span>
 </p>
+
 ```
 [~] cpan -i Time::Piece
 ```
