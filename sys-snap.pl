@@ -18,6 +18,7 @@
 use warnings;
 use strict;
 use Getopt::Long;
+use Fcntl qw(:DEFAULT :flock);
 
 my %opt = (
     'start'         => 0,
@@ -36,6 +37,7 @@ my %opt = (
     'verbose'       => '0',
     'max-lines'     => '20',
     'line_length'   => '145',
+    'pidfile'       => '/var/run/sys-snap.pid',
 );
 
 GetOptions( \%opt,
@@ -299,94 +301,48 @@ sub loadavg {
     return;
 }
 
+
 sub stop_syssnap {
-    my $pid;
-    # prevent check_status from printing to terminal
-    {
-        local *STDOUT;
-        open (STDOUT, '>', '/dev/null') or die "Can't access /dev/null";
-        $pid = &check_status();
-    }
-    if ($pid =~ /[\d+]/) {
-        #print "Test: $pid\n";
-        delete @ENV{'PATH', 'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
-        my $running_pid = "false";
-        my $ps_info = `ps -e -o pid,user,args | grep "[s]ys-snap.pl --start"`;
-        if ($ps_info =~ /^\s*([0-9]+)\s+root\s+(\/usr\/bin\/perl\s+\.\/|perl\s+)sys-snap\.pl\s+--start/ ) {
-            $running_pid = $1;
-        }
-        print "Current process: $ps_info";
-        print "Stop this process (y/n)?:";
-
-        my $choice = "0";
-        $choice = <STDIN>;
-        while ($choice !~ /[yn]/i ) {
+    if (my $pid = check_status()) {
             print "Stop this process (y/n)?:";
+            my $choice = "0";
             $choice = <STDIN>;
-            chomp ($choice);
+            while ($choice !~ /[yn]/i ) {
+                print "Stop this process (y/n)?:";
+                $choice = <STDIN>;
+                chomp ($choice);
+            }
+            if($choice =~ /[y]/i) {
+                print "Stopping $pid\n";
+		kill 9, $pid;
+                exit;
+            }
+            else { print "Exiting...\n"; exit; }
         }
-        if($choice =~ /[y]/i) {
-            print "Stopping $pid\n";
-            `kill -3 $pid`;
-            exit;
-        }
-        else { print "Exiting...\n"; exit; }
+        return;
     }
-    else {
-        print "Sys-snap is not currently running\n";
-    }
-    return;
-}
 
-# needs to be cleaned up
 sub check_status {
+    my $pid;
+    my $pidfh;
+    my $pidfile = $opt{'pidfile'};
+    my $status = 0;
 
-    delete @ENV{'PATH', 'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
-    my $ps_info = `ps -e -o pid,user,args | grep "[s]ys-snap.pl [-]\\{1,2\\}start"`;
-
-    my @pids = split("\n",$ps_info);
-    my $current_script = $$;
-    my $running_pid;
-
-    if(@pids > 2) {
-        print "Multiple sys-snap instances running?\n";
-    }
-
-    # if sys-snap is running there will be 2 matches, the current running pid, and the pid of newly invoked process
-    # this block tries to confirm that there is another intance running that does not match the pid of the newly invoked
-    elsif (@pids eq 2) {
-        if( $pids[0] =~ /^\s*([0-9]+)\s+root\s+(\/usr\/bin\/perl\s+\.\/|perl\s+)sys-snap\.pl\s+[-]{1,2}start/ ) {
-            my $tmp_pid = $1;
-            if($tmp_pid != $current_script) {
-                $running_pid=$tmp_pid;
-            }
-        }
-
-        if( $pids[1] =~ /^\s*([0-9]+)\s+root\s+(\/usr\/bin\/perl\s+\.\/|perl\s+)sys-snap\.pl\s+[-]{1,2}start/ ) {
-            my $tmp_pid = $1;
-            if($tmp_pid != $current_script) {
-                $running_pid=$tmp_pid;
-            }
-        }
-        if( !defined($running_pid) ) { print "Could not find PID, process might be running.\n"; return "on"; }
-
-        print "Sys-snap is running, PID: $running_pid\n";
-        return $running_pid;
-    }
-    elsif (defined $pids[0]) {
-
-        if( $pids[0] =~ /^\s*([0-9]+)\s+root\s+(\/usr\/bin\/perl\s+\.\/|perl\s+)sys-snap\.pl\s+[-]{1,2}start/ ) {
-
-            my $tmp_pid = $1;
-            if ($tmp_pid != $current_script) {
-                print "Sys-snap is running, PID: $tmp_pid\n"; return $tmp_pid;
-            } elsif( $tmp_pid eq $current_script ) { print "Sys-snap is not currently running\n"; return "off"; }
+    sysopen ($pidfh, $pidfile, O_RDWR | O_CREAT)
+    	or die "Could not open $pidfile: $!\n";
+    if (flock ($pidfh, LOCK_NB | LOCK_EX)) {
+        print "Sys-snap not currently running.\n";
+        flock($pidfh, LOCK_UN)
+            or die "Problem releasing lock on '$pidfile': $!\n";
+        $status = 0;
+    } else {
+        print "Sys-snap is running, PID: ";
+        while ($pid = <$pidfh>) {
+            print "'$pid'\n";
+            $status = $pid;
         }
     }
-    else { print "Sys-snap not currently running.\n"; return "off"; }
-
-    print "Failed PID checks\n";
-    return "off";
+    return $status
 }
 
 sub parse_check_time {
@@ -645,13 +601,7 @@ sub run_basic {
 }
 
 sub run_install {
-
-    my $tmp_check = &check_status;
-    if( $tmp_check =~ /[\d]+/ ) {
-        exit;
-    }
-    else
-    {
+if (not check_status) {
         print "Start sys-snap logging to '/root/system-snapshot/' (y/n)?:";
         my $choice = "0";
         $choice = <STDIN>;
@@ -664,6 +614,9 @@ sub run_install {
             print "Starting...\n";
         }
         else { print "Exiting...\n"; exit; }
+    } else {
+    print "Unable to start, only one sys-snap process should be active at a time\n";
+    exit;
     }
 
     use File::Path qw(rmtree);
@@ -721,8 +674,20 @@ sub run_install {
     open STDOUT, '>/dev/null' or die "Can't write to /dev/null: $!";
     defined(my $pid = fork) or die "Can't fork: $!";
     exit if $pid;
+    print "$pid\n";
     setsid or die "Can't start a new session: $!";
     open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
+
+    # Create a PID file for the new child process
+    my $childpid = $$;
+    my $pidfh;
+    my $pidfile = $opt{'pidfile'};
+
+    sysopen ($pidfh, $pidfile, O_RDWR | O_CREAT)
+        or die "Could not open $pidfile: $!\n";
+    print $pidfh "$childpid";
+    flock ($pidfh, LOCK_NB | LOCK_EX)
+        or die "Could not get lock on $pidfile: $!\n";
 
     ##########
     # Main() #
