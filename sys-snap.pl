@@ -322,6 +322,7 @@ sub stop_syssnap {
         if ( $choice =~ /[y]/i ) {
             print "Stopping $pid\n";
             kill 9, $pid;
+            unlink $opt{'pidfile'};
             exit;
         }
         else { print "Exiting...\n"; exit; }
