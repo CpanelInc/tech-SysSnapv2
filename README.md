@@ -197,7 +197,7 @@ If we add the verbose flag to --print we can get even more detail:
 </p>
 
 ```
-[~] /root/sys-snap.pl --print 9:00 10:00 v
+[~] /root/sys-snap.pl --print 9:00 10:00 --v
 < manually truncated for brevity >
 user: dovenull       
 cpu-score: 0.00      
